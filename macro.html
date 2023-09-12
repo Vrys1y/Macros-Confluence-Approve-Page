@@ -1,0 +1,258 @@
+## Macro Name: approve-page
+## Macro Titel: Approve page (Develop)
+## Macrp Body Processing: No macro Body
+## Developed by: Andrey Bilalov
+## Date created: 24/03/2022
+
+## @param Title:title=Title|type=string|desc=Approve title.|required=true
+## @param Approvers:title=Page Approvers|type=username|multiple=true|desc=Who is assigned to approve the content of this page.|required=true
+
+## Get the content properties
+#set ( $contentProperties = $content.getProperties() )
+#set ( $contentId = $content.getContentId().asLong() )
+#set ( $contentVersion = "v" + $content.getVersion() )
+#set ( $currentUser = $action.remoteUser )
+#set ( $currentUserName = $currentUser.getName() )
+
+## Set the property keys
+#set ( $approverKey = "pageApprove-" + $contentId + "-" + $currentUserName )
+#set ( $approverDateKey = "pageApproveDate-" + $contentId + "-" + $currentUserName )
+#set ( $assignedApproversKey = "assignedApprovers-" + $contentId )
+#set ( $userIsApprover = "false" )
+#set ( $currentDate = $action.dateFormatter.formatGivenString("dd-MMM-yyyy", $content.currentDate) + "" )
+
+$contentProperties.setStringProperty( $assignedApproversKey, $paramApprovers )
+
+## Get the user assignments for the page
+#set ( $assignedApprovers = $contentProperties.getStringProperty( $assignedApproversKey ).split(",") )
+
+## Set default value
+#set ( $approvalsComplete = "true" )
+#set ( $numApprovers = 0 )
+
+#if ( $paramApprovers )
+  #foreach( $approverUserName in $paramApprovers.split(",") )
+    #if ( $approverUserName != "" )
+      #set ( $numApprovers = $numApprovers + 1 )
+
+      ## set if current user is approver
+      #if ( $approverUserName == $currentUserName )
+        #set ( $userIsApprover = "true" )
+      #end
+
+      ## check approval for this assigned user
+      #set ( $keyForUser = "pageApprove-" + $contentId + "-" + $approverUserName )
+      #set ( $approverApprovedVersion = $contentProperties.getStringProperty( $keyForUser ) )
+
+      #if ( $approverApprovedVersion != $contentVersion )
+        #set ( $approvalsComplete = "false" )
+      #end
+      #set ( $approverApprovedVersion = "" )
+    #end
+  #end
+#end
+
+## Read the property values
+#set ( $approverVersion = $contentProperties.getStringProperty( $approverKey ) )
+
+## be sure to set a defaults
+#if ( !$approverVersion )
+  #set ( $approverVersion = "v0" )
+#end
+
+## Check if the user needs to approve this page
+#set ( $needsToApprove = "false" )
+#if ( $userIsApprover == "true" && $contentVersion != $approverVersion )
+  #set ( $needsToApprove = "true" )
+#end
+
+## Add prefixes for display
+#set ( $prefix = "pageApprove-" )
+#set ( $datePrefix = "pageApproveDate-" )
+#set ( $columnTitle = "Approved" )
+
+<style type="text/css">
+table.aui { 
+      width: auto; 
+      border-collapse: collapse;
+}
+table.aui .data_cell {
+      text-align:left;
+      vertical-align:middle;"
+}
+
+.approve-page-macro-body th,
+.approve-page-macro-body td,
+.approve-page-macro-body .confluenceTh,
+.approve-page-macro-body .confluenceTd {
+      border: 0;
+}
+
+</style>
+
+<div class="approve-page-macro-body">
+<h3>$paramTitle</h3>
+<table class="aui">
+      <thead>
+            <tr>
+                  <th id="name">Username</th>
+                  <th id="status">Status</th>
+                  <th id="date">Date</th>
+                  <th id="action">##No print</th>
+            </tr>
+      </thead>
+      <tbody>
+      #foreach( $userName in $assignedApprovers )
+            #set ( $currentUserIsApprover = "false" )
+
+            #if ( $userName == $currentUserName )
+                  #set ( $currentUserIsApprover = "true" )
+            #end
+
+            ## Get user full name and profile picture
+            #set ($userObject = $userAccessor.getUserByName($userName))
+            
+            #if ( $userName != "" )
+                  #set ( $valueForKey = "" )
+                  #set ( $keyName = $prefix + $contentId + "-" + $userName)
+                  #set ( $keyNameDate = $datePrefix + $contentId + "-" + $userName)
+                  #set ( $valueForKey = $contentProperties.getStringProperty($keyName) )
+                  #set ( $approveStatus = "Pending" )
+                  #set ( $displayDate = "" )
+                  ## #set ( $bgColor = "#FFC" )
+            
+                  #if ( $valueForKey && $valueForKey != "" )
+
+
+                        #set ( $displayDate = $contentProperties.getStringProperty($keyNameDate) )
+                        
+                        #if ( !$displayDate )
+                              #set ( $displayDate = "Unknown" )
+                        #end
+
+                        #if ( $valueForKey == $contentVersion )
+                              #set ( $approveStatus = "Approved" )
+                        #end
+                  #end
+
+            #end
+            <tr>
+                  <td headers="name" class="data_cell">
+                        <div class="userinfo">
+                        <span class="aui-avatar aui-avatar-large">
+                              <span class="aui-avatar-inner">
+                                    #userLogoBlock($userObject)
+                              </span>
+                        </span>
+                        #usernameLink($userName)
+                        </div>
+                  </td>
+
+                  
+                  
+                  #if ( $approveStatus == "Pending" && $currentUserIsApprover == "true" )
+                        <td headers="status" class="data_cell">
+                              <span class="aui-lozenge aui-lozenge-current">Pending</span>
+                        </td>
+
+                        <td headers="date">
+                        ## No display
+                        </td>
+                        <td headers="action" class="data_cell">
+                        <a href="https://DUMMY.CONF.URL/rest/scriptrunner/latest/custom/approvePage?pageId=$contentId">
+                              <button class="aui-button aui-button-primary">
+                                    Approve
+                              </button>
+                        </a>
+                        </td>
+
+                  #elseif ( $approveStatus == "Pending" )
+                        <td headers="status" class="data_cell">
+                              <span class="aui-lozenge aui-lozenge-current">Pending</span>
+                        </td>
+
+                        <td headers="date" class="data_cell">
+                        ## No display
+                        </td>
+                        <td headers="date">
+                        ## No display
+                        </td>
+                        </td>
+
+                  #elseif ( $approveStatus == "Approved" )
+                        <td headers="status" class="data_cell">
+                              <span class="aui-lozenge aui-lozenge-success">Approved</span>
+                        </td>
+                        <td headers="date" class="data_cell">
+                              <p>$displayDate</p>
+                        </td>
+
+                        #if ( $currentUserIsApprover == "true" && $currentUser == $userObject )
+                              <td headers="action" class="data_cell">
+                              <a href="https://DUMMY.CONF.URL/rest/scriptrunner/latest/custom/declinePage?pageId=$contentId">
+                                    <button class="aui-button aui-button-primary">
+                                          Decline
+                                    </button>
+                              </a>
+                              </td>
+                        #end
+
+                  #else 
+                        <td headers="status" class="data_cell">
+                              <span class="aui-lozenge aui-lozenge-error">Error</span>
+                        </td>
+                        <td headers="date" class="data_cell">
+                        ## No display
+                        </td>
+                        <td>
+                        ## No display
+                        </td>
+                  #end
+
+            </tr>
+      #end
+      <tr>
+      #if ( $approvalsComplete == "false" )
+            <td class="data_cell">
+            <a href="https://DUMMY.CONF.URL/rest/scriptrunner/latest/custom/sendEmail?approvers=$paramApprovers&pageId=$contentId">
+                  <button class="aui-button aui-button-primary">
+                        Send e-mail notification to Approvers
+                  </button>
+            </a>
+            </td>
+            <td class="data_cell">
+            ## No display
+            </td>
+            <td class="data_cell">
+            ## No display
+            </td>
+            <td class="data_cell">
+            ## No display
+            </td>
+      #end
+      </tr>
+
+
+      #if ( $approvalsComplete == "true" )
+      <td colspan="4">
+            <div class="aui-message aui-message-success">
+                  <p class="title">
+                        <strong>Approved</strong>
+                  </p>
+            <p>This page approved.</p>
+            </div>
+      </td>
+      #else
+      <td colspan="4">
+            <div class="aui-message aui-message-warning">
+                  <p class="title">
+                        <strong>Pending</strong>
+                  </p>
+            <p>This page is currently under review.</p>
+            </div>
+      </td>
+      #end
+
+      </tbody>
+</table>
+</div>
